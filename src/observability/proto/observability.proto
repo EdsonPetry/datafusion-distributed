@@ -4,6 +4,7 @@ package observability;
 service ObservabilityService {
   rpc Ping (PingRequest) returns (PingResponse);
   rpc GetTaskMetrics (GetTaskMetricsRequest) returns (GetTaskMetricsResponse);
+  rpc GetWorkers (GetWorkersRequest) returns (GetWorkersResponse);
 }
 
 message PingRequest {}
@@ -33,3 +34,12 @@ message GetTaskMetricsResponse {
   repeated TaskMetricsSummary task_summaries = 1;
 }
 
+message GetWorkersRequest {}
+
+message WorkerInfo {
+  string url = 1;
+}
+
+message GetWorkersResponse {
+  repeated WorkerInfo workers = 1;
+}

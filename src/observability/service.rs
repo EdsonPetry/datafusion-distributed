@@ -1,4 +1,5 @@
 use crate::TaskData;
+use crate::WorkerResolver;
 use crate::execution_plans::{NetworkBroadcastExec, NetworkCoalesceExec, NetworkShuffleExec};
 use crate::protobuf::StageKey;
 use datafusion::physical_plan::ExecutionPlan;
@@ -8,7 +9,9 @@ use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tonic::{Request, Response, Status};
 
-use super::generated::observability::{GetTaskMetricsResponse, TaskMetricsSummary};
+use super::generated::observability::{
+    GetTaskMetricsResponse, GetWorkersRequest, GetWorkersResponse, TaskMetricsSummary,
+};
 use super::{
     ObservabilityService,
     generated::observability::{GetTaskMetricsRequest, PingRequest, PingResponse},
@@ -16,11 +19,18 @@ use super::{
 
 pub struct ObservabilityServiceImpl {
     task_data_entries: Arc<Cache<StageKey, Arc<OnceCell<TaskData>>>>,
+    worker_resolver: Arc<dyn WorkerResolver + Send + Sync>,
 }
 
 impl ObservabilityServiceImpl {
-    pub fn new(task_data_entries: Arc<Cache<StageKey, Arc<OnceCell<TaskData>>>>) -> Self {
-        Self { task_data_entries }
+    pub fn new(
+        task_data_entries: Arc<Cache<StageKey, Arc<OnceCell<TaskData>>>>,
+        worker_resolver: Arc<dyn WorkerResolver + Send + Sync>,
+    ) -> Self {
+        Self {
+            task_data_entries,
+            worker_resolver,
+        }
     }
 }
 
@@ -45,6 +55,25 @@ impl ObservabilityService for ObservabilityServiceImpl {
         }
 
         Ok(Response::new(GetTaskMetricsResponse { task_summaries }))
+    }
+
+    async fn get_workers(
+        &self,
+        _request: Request<GetWorkersRequest>,
+    ) -> Result<Response<GetWorkersResponse>, Status> {
+        let urls = self
+            .worker_resolver
+            .get_urls()
+            .map_err(|e| Status::internal(format!("Failed to resolve workers: {e}")))?;
+
+        let workers = urls
+            .into_iter()
+            .map(|url| super::WorkerInfo {
+                url: url.to_string(),
+            })
+            .collect();
+
+        Ok(Response::new(GetWorkersResponse { workers }))
     }
 }
 
@@ -134,5 +163,96 @@ fn accumulate_metrics(
             continue;
         }
         accumulate_metrics(child, elapsed_compute, current_memory_usage, spill_count);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::WorkerResolver;
+    use datafusion::common::DataFusionError;
+    use url::Url;
+
+    struct TestWorkerResolver {
+        urls: Vec<Url>,
+    }
+
+    impl WorkerResolver for TestWorkerResolver {
+        fn get_urls(&self) -> Result<Vec<Url>, DataFusionError> {
+            Ok(self.urls.clone())
+        }
+    }
+
+    struct FailingWorkerResolver;
+
+    impl WorkerResolver for FailingWorkerResolver {
+        fn get_urls(&self) -> Result<Vec<Url>, DataFusionError> {
+            Err(DataFusionError::Internal(
+                "resolver unavailable".to_string(),
+            ))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_workers_returns_resolver_urls() {
+        let urls = vec![
+            Url::parse("http://worker1:8080").unwrap(),
+            Url::parse("http://worker2:8080").unwrap(),
+            Url::parse("http://worker3:8080").unwrap(),
+        ];
+
+        let cache = Arc::new(Cache::builder().build());
+        let resolver = Arc::new(TestWorkerResolver { urls: urls.clone() });
+        let service = ObservabilityServiceImpl::new(cache, resolver);
+
+        let response = service
+            .get_workers(Request::new(GetWorkersRequest {}))
+            .await
+            .unwrap();
+
+        let returned_urls: Vec<String> = response
+            .into_inner()
+            .workers
+            .into_iter()
+            .map(|w| w.url)
+            .collect();
+
+        assert_eq!(
+            returned_urls,
+            vec![
+                "http://worker1:8080/",
+                "http://worker2:8080/",
+                "http://worker3:8080/",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_workers_empty_resolver() {
+        let cache = Arc::new(Cache::builder().build());
+        let resolver = Arc::new(TestWorkerResolver { urls: vec![] });
+        let service = ObservabilityServiceImpl::new(cache, resolver);
+
+        let response = service
+            .get_workers(Request::new(GetWorkersRequest {}))
+            .await
+            .unwrap();
+
+        assert!(response.into_inner().workers.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_workers_failing_resolver_returns_error() {
+        let cache = Arc::new(Cache::builder().build());
+        let resolver = Arc::new(FailingWorkerResolver);
+        let service = ObservabilityServiceImpl::new(cache, resolver);
+
+        let result = service
+            .get_workers(Request::new(GetWorkersRequest {}))
+            .await;
+
+        assert!(result.is_err());
+        let status = result.unwrap_err();
+        assert_eq!(status.code(), tonic::Code::Internal);
     }
 }

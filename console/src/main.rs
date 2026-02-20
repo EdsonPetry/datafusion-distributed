@@ -1,4 +1,5 @@
 mod app;
+mod discovery;
 mod ui;
 
 use app::App;
@@ -8,15 +9,24 @@ use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
 
+/// Default port for the observability gRPC service.
+pub const DEFAULT_OBSERVABILITY_PORT: u16 = 6190;
+
 #[derive(StructOpt)]
 #[structopt(
     name = "datafusion-distributed-console",
     about = "Console for monitoring DataFusion distributed workers"
 )]
 struct Args {
-    /// Comma-delimited list of worker ports (e.g. 8080,8081)
-    #[structopt(long = "cluster-ports", use_delimiter = true)]
-    cluster_ports: Vec<u16>,
+    /// Seed worker URL for auto-discovery. Connects to this worker and calls
+    /// GetWorkers to discover the full cluster.
+    #[structopt(long = "worker", default_value = "http://localhost:6190")]
+    worker: String,
+
+    /// Static list of worker URLs (comma-separated). When provided, skips
+    /// discovery and connects directly to these workers.
+    #[structopt(long = "workers", use_delimiter = true)]
+    workers: Vec<String>,
 }
 
 #[tokio::main]
@@ -25,13 +35,30 @@ async fn main() -> color_eyre::Result<()> {
 
     let args = Args::from_args();
 
-    let worker_urls: Vec<Url> = args
-        .cluster_ports
-        .iter()
-        .map(|port| Url::parse(&format!("http://localhost:{port}")).expect("valid localhost URL"))
-        .collect();
+    let (worker_urls, seed_url) = if !args.workers.is_empty() {
+        // Static mode: parse provided URLs directly, no re-discovery
+        let urls: Vec<Url> = args
+            .workers
+            .iter()
+            .map(|u| Url::parse(u).expect("Invalid worker URL"))
+            .collect();
+        (urls, None)
+    } else {
+        // Discovery mode: connect to seed worker, call GetWorkers
+        let seed = Url::parse(&args.worker).expect("Invalid seed worker URL");
+        match discovery::discover_workers(&seed).await {
+            Ok(urls) => (urls, Some(seed)),
+            Err(e) => {
+                eprintln!(
+                    "Warning: GetWorkers discovery failed for {seed}: {e}. \
+                     Falling back to seed worker only."
+                );
+                (vec![seed.clone()], Some(seed))
+            }
+        }
+    };
 
-    let mut app = App::new(worker_urls);
+    let mut app = App::new(worker_urls, seed_url);
 
     // Initialize terminal
     let mut terminal = ratatui::init();

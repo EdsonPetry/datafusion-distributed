@@ -1,7 +1,9 @@
+use crate::discovery;
 use datafusion_distributed::{
     GetTaskMetricsRequest, ObservabilityServiceClient, PingRequest, TaskMetricsSummary,
 };
 use ratatui::widgets::TableState;
+use std::collections::HashSet;
 use std::time::{Duration, Instant};
 use tonic::transport::Channel;
 use url::Url;
@@ -12,6 +14,12 @@ pub struct App {
     pub should_quit: bool,
     pub console_state: ConsoleState,
     pub task_table_state: TableState,
+    /// Seed worker URL for periodic re-discovery. None in static mode.
+    seed_url: Option<Url>,
+    /// When the last GetWorkers discovery was performed.
+    last_discovery: Option<Instant>,
+    /// How often to re-poll GetWorkers for new workers.
+    discovery_interval: Duration,
 }
 
 /// Represents overall state of the console application.
@@ -51,7 +59,10 @@ pub struct TaskRow {
 
 impl App {
     /// Create a new App with the given worker URLs.
-    pub fn new(worker_urls: Vec<Url>) -> Self {
+    ///
+    /// If `seed_url` is provided, the app will periodically re-poll `GetWorkers`
+    /// on the seed to discover new workers joining the cluster.
+    pub fn new(worker_urls: Vec<Url>, seed_url: Option<Url>) -> Self {
         let workers = worker_urls
             .into_iter()
             .map(|url| WorkerState {
@@ -70,6 +81,9 @@ impl App {
             should_quit: false,
             console_state: ConsoleState::Idle,
             task_table_state: TableState::default(),
+            seed_url,
+            last_discovery: Some(Instant::now()), // don't re-discover immediately on startup
+            discovery_interval: Duration::from_secs(30),
         }
     }
 
@@ -93,8 +107,23 @@ impl App {
         }
     }
 
-    /// Poll all workers for task metrics.
+    /// Poll all workers for task metrics and periodically re-discover new workers.
     pub async fn tick(&mut self) {
+        // Periodic re-discovery of new workers via GetWorkers
+        if let Some(seed_url) = &self.seed_url {
+            let should_rediscover = self
+                .last_discovery
+                .map(|t| t.elapsed() >= self.discovery_interval)
+                .unwrap_or(true);
+
+            if should_rediscover {
+                self.last_discovery = Some(Instant::now());
+                if let Ok(discovered_urls) = discovery::discover_workers(seed_url).await {
+                    self.merge_discovered_workers(discovered_urls);
+                }
+            }
+        }
+
         // Attempt reconnection for disconnected workers
         for worker in &mut self.workers {
             if worker.should_retry_connection() {
@@ -117,6 +146,27 @@ impl App {
         .await;
 
         self.update_console_state();
+    }
+
+    /// Merge newly discovered worker URLs into the existing worker list.
+    /// Adds new workers in `Connecting` state. Does not remove workers that
+    /// disappeared from discovery — they will naturally show as `Disconnected`.
+    fn merge_discovered_workers(&mut self, discovered_urls: Vec<Url>) {
+        let existing: HashSet<Url> = self.workers.iter().map(|w| w.url.clone()).collect();
+
+        for url in discovered_urls {
+            if !existing.contains(&url) {
+                self.workers.push(WorkerState {
+                    url,
+                    client: None,
+                    connection_status: ConnectionStatus::Connecting,
+                    tasks: Vec::new(),
+                    completed_tasks: Vec::new(),
+                    last_poll: None,
+                    last_reconnect_attempt: None,
+                });
+            }
+        }
     }
 
     /// Update overall console state based on worker states.

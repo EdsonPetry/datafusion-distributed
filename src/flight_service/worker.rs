@@ -1,7 +1,9 @@
 use crate::flight_service::WorkerSessionBuilder;
 use crate::flight_service::do_get::TaskData;
 use crate::protobuf::StageKey;
-use crate::{DefaultSessionBuilder, ObservabilityServiceImpl, ObservabilityServiceServer};
+use crate::{
+    DefaultSessionBuilder, ObservabilityServiceImpl, ObservabilityServiceServer, WorkerResolver,
+};
 use arrow_flight::flight_service_server::{FlightService, FlightServiceServer};
 use arrow_flight::{
     Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
@@ -130,11 +132,13 @@ impl Worker {
             .max_encoding_message_size(usize::MAX)
     }
 
-    pub fn with_observability_service(
+    pub fn to_observability_service(
         &self,
+        worker_resolver: Arc<dyn WorkerResolver + Send + Sync>,
     ) -> ObservabilityServiceServer<ObservabilityServiceImpl> {
         ObservabilityServiceServer::new(ObservabilityServiceImpl::new(
             self.task_data_entries.clone(),
+            worker_resolver,
         ))
     }
 

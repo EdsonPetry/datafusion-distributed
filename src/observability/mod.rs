@@ -7,7 +7,7 @@ pub use generated::observability::observability_service_server::{
 };
 
 pub use generated::observability::{
-    GetTaskMetricsRequest, GetTaskMetricsResponse, PingRequest, PingResponse, StageKey,
-    TaskMetricsSummary,
+    GetTaskMetricsRequest, GetTaskMetricsResponse, GetWorkersRequest, GetWorkersResponse,
+    PingRequest, PingResponse, StageKey, TaskMetricsSummary, WorkerInfo,
 };
 pub use service::ObservabilityServiceImpl;
