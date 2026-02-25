@@ -5,6 +5,8 @@ service ObservabilityService {
   rpc Ping (PingRequest) returns (PingResponse);
   rpc GetTaskMetrics (GetTaskMetricsRequest) returns (GetTaskMetricsResponse);
   rpc GetWorkers (GetWorkersRequest) returns (GetWorkersResponse);
+  rpc GetWorkerSnapshot (GetWorkerSnapshotRequest) returns (GetWorkerSnapshotResponse);
+  rpc WatchWorkerSnapshots (WatchWorkerSnapshotsRequest) returns (stream WorkerSnapshotEvent);
 }
 
 message PingRequest {}
@@ -32,6 +34,36 @@ message GetTaskMetricsRequest {}
 
 message GetTaskMetricsResponse {
   repeated TaskMetricsSummary task_summaries = 1;
+}
+
+message GetWorkerSnapshotRequest {}
+
+message GetWorkerSnapshotResponse {
+  WorkerSnapshot snapshot = 1;
+}
+
+message WatchWorkerSnapshotsRequest {
+  // Desired update interval. The server may clamp this to a safe range.
+  uint32 interval_ms = 1;
+}
+
+message WorkerSnapshotEvent {
+  uint64 sequence = 1;
+  bool heartbeat = 2;
+  WorkerSnapshot snapshot = 3;
+}
+
+message WorkerSnapshot {
+  uint64 snapshot_unix_nanos = 1;
+  string worker_url = 2;
+  repeated bytes active_query_ids = 3;
+  uint32 active_tasks = 4;
+
+  // Worker load metrics
+  uint64 elapsed_compute_ns_total = 5;
+  uint64 build_mem_used_bytes = 6;
+  uint64 peak_mem_used_bytes = 7;
+  uint64 spill_count = 8;
 }
 
 message GetWorkersRequest {}

@@ -37,6 +37,48 @@ pub struct GetTaskMetricsResponse {
     pub task_summaries: ::prost::alloc::vec::Vec<TaskMetricsSummary>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetWorkerSnapshotRequest {}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetWorkerSnapshotResponse {
+    #[prost(message, optional, tag = "1")]
+    pub snapshot: ::core::option::Option<WorkerSnapshot>,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WatchWorkerSnapshotsRequest {
+    /// Desired update interval. The server may clamp this to a safe range.
+    #[prost(uint32, tag = "1")]
+    pub interval_ms: u32,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkerSnapshotEvent {
+    #[prost(uint64, tag = "1")]
+    pub sequence: u64,
+    #[prost(bool, tag = "2")]
+    pub heartbeat: bool,
+    #[prost(message, optional, tag = "3")]
+    pub snapshot: ::core::option::Option<WorkerSnapshot>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkerSnapshot {
+    #[prost(uint64, tag = "1")]
+    pub snapshot_unix_nanos: u64,
+    #[prost(string, tag = "2")]
+    pub worker_url: ::prost::alloc::string::String,
+    #[prost(bytes = "vec", repeated, tag = "3")]
+    pub active_query_ids: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+    #[prost(uint32, tag = "4")]
+    pub active_tasks: u32,
+    /// Worker load metrics
+    #[prost(uint64, tag = "5")]
+    pub elapsed_compute_ns_total: u64,
+    #[prost(uint64, tag = "6")]
+    pub build_mem_used_bytes: u64,
+    #[prost(uint64, tag = "7")]
+    pub peak_mem_used_bytes: u64,
+    #[prost(uint64, tag = "8")]
+    pub spill_count: u64,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GetWorkersRequest {}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkerInfo {
@@ -215,6 +257,64 @@ pub mod observability_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn get_worker_snapshot(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetWorkerSnapshotRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetWorkerSnapshotResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/observability.ObservabilityService/GetWorkerSnapshot",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "observability.ObservabilityService",
+                        "GetWorkerSnapshot",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn watch_worker_snapshots(
+            &mut self,
+            request: impl tonic::IntoRequest<super::WatchWorkerSnapshotsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<tonic::codec::Streaming<super::WorkerSnapshotEvent>>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/observability.ObservabilityService/WatchWorkerSnapshots",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "observability.ObservabilityService",
+                        "WatchWorkerSnapshots",
+                    ),
+                );
+            self.inner.server_streaming(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -246,6 +346,26 @@ pub mod observability_service_server {
             request: tonic::Request<super::GetWorkersRequest>,
         ) -> std::result::Result<
             tonic::Response<super::GetWorkersResponse>,
+            tonic::Status,
+        >;
+        async fn get_worker_snapshot(
+            &self,
+            request: tonic::Request<super::GetWorkerSnapshotRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetWorkerSnapshotResponse>,
+            tonic::Status,
+        >;
+        /// Server streaming response type for the WatchWorkerSnapshots method.
+        type WatchWorkerSnapshotsStream: tonic::codegen::tokio_stream::Stream<
+                Item = std::result::Result<super::WorkerSnapshotEvent, tonic::Status>,
+            >
+            + std::marker::Send
+            + 'static;
+        async fn watch_worker_snapshots(
+            &self,
+            request: tonic::Request<super::WatchWorkerSnapshotsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<Self::WatchWorkerSnapshotsStream>,
             tonic::Status,
         >;
     }
@@ -461,6 +581,106 @@ pub mod observability_service_server {
                                 max_encoding_message_size,
                             );
                         let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/observability.ObservabilityService/GetWorkerSnapshot" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetWorkerSnapshotSvc<T: ObservabilityService>(pub Arc<T>);
+                    impl<
+                        T: ObservabilityService,
+                    > tonic::server::UnaryService<super::GetWorkerSnapshotRequest>
+                    for GetWorkerSnapshotSvc<T> {
+                        type Response = super::GetWorkerSnapshotResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetWorkerSnapshotRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ObservabilityService>::get_worker_snapshot(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetWorkerSnapshotSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/observability.ObservabilityService/WatchWorkerSnapshots" => {
+                    #[allow(non_camel_case_types)]
+                    struct WatchWorkerSnapshotsSvc<T: ObservabilityService>(pub Arc<T>);
+                    impl<
+                        T: ObservabilityService,
+                    > tonic::server::ServerStreamingService<
+                        super::WatchWorkerSnapshotsRequest,
+                    > for WatchWorkerSnapshotsSvc<T> {
+                        type Response = super::WorkerSnapshotEvent;
+                        type ResponseStream = T::WatchWorkerSnapshotsStream;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::ResponseStream>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::WatchWorkerSnapshotsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ObservabilityService>::watch_worker_snapshots(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = WatchWorkerSnapshotsSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.server_streaming(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)
