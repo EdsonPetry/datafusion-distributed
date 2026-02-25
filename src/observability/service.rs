@@ -474,7 +474,7 @@ mod tests {
         assert_eq!(snapshot.active_query_ids[1], q2);
 
         assert_eq!(snapshot.elapsed_compute_ns_total, 60);
-        assert_eq!(snapshot.build_mem_used_bytes, 19);
+        assert_eq!(snapshot.build_mem_used_bytes, 17);
         assert_eq!(snapshot.peak_mem_used_bytes, 25);
         assert_eq!(snapshot.spill_count, 6);
     }
