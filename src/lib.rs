@@ -43,10 +43,11 @@ pub use stage::{
 };
 
 pub use observability::{
-    GetTaskMetricsRequest, GetTaskMetricsResponse, GetWorkersRequest, GetWorkersResponse,
-    ObservabilityService, ObservabilityServiceClient, ObservabilityServiceImpl,
-    ObservabilityServiceServer, PingRequest, PingResponse, StageKey as ObservabilityStageKey,
-    TaskMetricsSummary, WorkerInfo,
+    GetTaskMetricsRequest, GetTaskMetricsResponse, GetWorkerSnapshotRequest,
+    GetWorkerSnapshotResponse, GetWorkersRequest, GetWorkersResponse, ObservabilityService,
+    ObservabilityServiceClient, ObservabilityServiceImpl, ObservabilityServiceServer, PingRequest,
+    PingResponse, StageKey as ObservabilityStageKey, TaskMetricsSummary,
+    WatchWorkerSnapshotsRequest, WorkerInfo, WorkerSnapshot, WorkerSnapshotEvent,
 };
 
 pub use protobuf::StageKey;
