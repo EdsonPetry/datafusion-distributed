@@ -45,9 +45,14 @@ pub use stage::{
 };
 
 pub use observability::{
-    GetTaskProgressRequest, GetTaskProgressResponse, ObservabilityService,
-    ObservabilityServiceClient, ObservabilityServiceImpl, ObservabilityServiceServer, PingRequest,
-    PingResponse, StageKey as ObservabilityStageKey, TaskProgress, TaskStatus, WorkerMetrics,
+    GetClusterWorkersRequest, GetClusterWorkersResponse, GetTaskProgressRequest,
+    GetTaskProgressResponse, ObservabilityService, ObservabilityServiceClient,
+    ObservabilityServiceImpl, ObservabilityServiceServer, PingRequest, PingResponse,
+    StageKey as ObservabilityStageKey, TaskProgress, TaskStatus, WorkerMetrics,
 };
 
 pub use protobuf::StageKey;
+
+/// Default port for workers to listen on (Flight + Observability gRPC services).
+/// The console connects to `localhost:DEFAULT_WORKER_PORT` when no arguments are provided.
+pub const DEFAULT_WORKER_PORT: u16 = 6789;

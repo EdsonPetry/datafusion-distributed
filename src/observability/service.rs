@@ -1,4 +1,5 @@
 use crate::flight_service::TaskData;
+use crate::networking::WorkerResolver;
 use crate::protobuf::StageKey;
 use datafusion::physical_plan::ExecutionPlan;
 use moka::future::Cache;
@@ -7,20 +8,28 @@ use tokio::sync::OnceCell;
 use tonic::{Request, Response, Status};
 
 use super::{
-    GetTaskProgressResponse, ObservabilityService, TaskProgress, TaskStatus, WorkerMetrics,
-    generated::observability::{GetTaskProgressRequest, PingRequest, PingResponse},
+    GetClusterWorkersResponse, GetTaskProgressResponse, ObservabilityService, TaskProgress,
+    TaskStatus, WorkerMetrics,
+    generated::observability::{
+        GetClusterWorkersRequest, GetTaskProgressRequest, PingRequest, PingResponse,
+    },
 };
 
 pub struct ObservabilityServiceImpl {
     task_data_entries: Arc<Cache<StageKey, Arc<OnceCell<TaskData>>>>,
+    worker_resolver: Arc<dyn WorkerResolver + Send + Sync>,
     #[cfg(feature = "system-metrics")]
     system: std::sync::Mutex<sysinfo::System>,
 }
 
 impl ObservabilityServiceImpl {
-    pub fn new(task_data_entries: Arc<Cache<StageKey, Arc<OnceCell<TaskData>>>>) -> Self {
+    pub fn new(
+        task_data_entries: Arc<Cache<StageKey, Arc<OnceCell<TaskData>>>>,
+        worker_resolver: Arc<dyn WorkerResolver + Send + Sync>,
+    ) -> Self {
         Self {
             task_data_entries,
+            worker_resolver,
             #[cfg(feature = "system-metrics")]
             system: std::sync::Mutex::new(sysinfo::System::new()),
         }
@@ -65,6 +74,20 @@ impl ObservabilityService for ObservabilityServiceImpl {
             tasks,
             worker_metrics,
         }))
+    }
+
+    async fn get_cluster_workers(
+        &self,
+        _request: Request<GetClusterWorkersRequest>,
+    ) -> Result<Response<GetClusterWorkersResponse>, Status> {
+        let urls = self
+            .worker_resolver
+            .get_urls()
+            .map_err(|e| Status::internal(format!("Failed to resolve workers: {e}")))?;
+
+        let worker_urls = urls.into_iter().map(|url| url.to_string()).collect();
+
+        Ok(Response::new(GetClusterWorkersResponse { worker_urls }))
     }
 }
 
