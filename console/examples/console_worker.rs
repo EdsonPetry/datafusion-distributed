@@ -1,8 +1,11 @@
+use async_trait::async_trait;
 use clap::Parser;
-use datafusion_distributed::Worker;
+use datafusion::common::DataFusionError;
+use datafusion_distributed::{Worker, WorkerResolver};
 use std::error::Error;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tonic::transport::Server;
+use url::Url;
 
 #[derive(Parser)]
 #[command(
@@ -18,13 +21,28 @@ struct Args {
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
+    let resolver = LocalhostWorkerResolver { port: args.port };
     let worker = Worker::default();
 
     Server::builder()
-        .add_service(worker.with_observability_service())
+        .add_service(worker.with_observability_service(resolver))
         .add_service(worker.into_flight_server())
         .serve(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), args.port))
         .await?;
 
     Ok(())
+}
+
+#[derive(Clone)]
+struct LocalhostWorkerResolver {
+    port: u16,
+}
+
+#[async_trait]
+impl WorkerResolver for LocalhostWorkerResolver {
+    fn get_urls(&self) -> Result<Vec<Url>, DataFusionError> {
+        Ok(vec![
+            Url::parse(&format!("http://localhost:{}", self.port)).unwrap(),
+        ])
+    }
 }
