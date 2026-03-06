@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use clap::Parser;
 use datafusion::common::DataFusionError;
-use datafusion_distributed::{Worker, WorkerResolver};
+use datafusion_distributed::{DEFAULT_WORKER_PORT, Worker, WorkerResolver};
 use std::error::Error;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tonic::transport::Server;
@@ -13,7 +13,7 @@ use url::Url;
     about = "A localhost DataFusion worker with observability"
 )]
 struct Args {
-    #[arg(default_value = "8080")]
+    #[arg(default_value_t = DEFAULT_WORKER_PORT)]
     port: u16,
 }
 
