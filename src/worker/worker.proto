@@ -8,6 +8,7 @@ service WorkerService {
   rpc CoordinatorChannel(stream CoordinatorToWorkerMsg) returns (stream WorkerToCoordinatorMsg);
   // Executes the requested partition range of a subplan previously sent by the coordinator channel.
   rpc ExecuteTask(ExecuteTaskRequest) returns (stream FlightData);
+  // Returns metadata about the worker.
   rpc GetWorkerInfo(GetWorkerInfoRequest) returns (GetWorkerInfoResponse);
 }
 
