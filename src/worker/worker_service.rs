@@ -156,6 +156,7 @@ impl Worker {
         ))
     }
 
+    /// Sets a version string reported by the `GetWorkerInfo` gRPC endpoint.
     pub fn with_version(mut self, version: impl Into<Cow<'static, str>>) -> Self {
         self.version = version.into();
         self
