@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::from_args();
 
     let mut worker = Worker::default();
-    if let Some(version) = &args.version {
+    if let Some(version) = args.version {
         worker = worker.with_version(version);
     }
 
