@@ -16,6 +16,7 @@ use datafusion::execution::runtime_env::RuntimeEnv;
 use datafusion::physical_plan::ExecutionPlan;
 use futures::StreamExt;
 use moka::future::Cache;
+use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 use tonic::codegen::BoxStream;
@@ -42,7 +43,7 @@ pub struct Worker {
     pub(super) session_builder: Arc<dyn WorkerSessionBuilder + Send + Sync>,
     pub(super) hooks: WorkerHooks,
     pub(super) max_message_size: Option<usize>,
-    pub(super) version: String,
+    pub(super) version: Cow<'static, str>,
 }
 
 impl Default for Worker {
@@ -56,7 +57,7 @@ impl Default for Worker {
             session_builder: Arc::new(DefaultSessionBuilder),
             hooks: WorkerHooks::default(),
             max_message_size: Some(usize::MAX),
-            version: String::default(),
+            version: Cow::Borrowed(""),
         }
     }
 }
@@ -155,7 +156,7 @@ impl Worker {
         ))
     }
 
-    pub fn with_version(mut self, version: impl Into<String>) -> Self {
+    pub fn with_version(mut self, version: impl Into<Cow<'static, str>>) -> Self {
         self.version = version.into();
         self
     }
@@ -211,7 +212,7 @@ impl WorkerService for Worker {
         _request: Request<GetWorkerInfoRequest>,
     ) -> Result<Response<GetWorkerInfoResponse>, Status> {
         Ok(Response::new(GetWorkerInfoResponse {
-            version_number: self.version.clone(),
+            version_number: self.version.to_string(),
         }))
     }
 }
